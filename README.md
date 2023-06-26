@@ -2,8 +2,9 @@
 <p align="center">
 <img width="100" alt="image" src="https://github.com/noraliucode/cron/assets/12429503/c60bd905-7164-4099-908b-832e8ef3c81c">
 </p>
+
 CryptoPatronage Payment System is a utility that automates the execution of tasks related to
-[CryptoPatronage](https://patronage.shokunin.network/). It uses a cron job to perform these tasks at specific intervals. This repository contains the source code for this utility.
+[CryptoPatronage](https://patronage.shokunin.network). It uses a cron job to perform these tasks at specific intervals. This repository contains the source code for this utility.
 
 ## Overview
 
