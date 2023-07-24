@@ -74,7 +74,7 @@ const getAnnouncedCalls = async (delegate, real) => {
 
     return transfer;
   } catch (error) {
-    console.log("getTransactions error:", error);
+    console.log("getAnnouncedCalls error:", error);
   }
 };
 
