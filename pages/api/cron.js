@@ -6,14 +6,14 @@ export const config = {
   runtime: "edge",
 };
 
-const readData = async () => {
+export const readData = async () => {
   try {
     const response = await fetch(
-      `https://api.jsonbin.io/v3/b/${process.env.REACT_APP_BIN_ID}`,
+      `https://api.jsonbin.io/v3/b/${process.env.NEXT_PUBLIC_BIN_ID}`,
       {
         method: "GET",
         headers: {
-          "X-Master-Key": `${process.env.REACT_APP_BIN_SECRET_KEY}`,
+          "X-Master-Key": `${process.env.NEXT_PUBLIC_BIN_SECRET_KEY}`,
         },
       }
     );
@@ -29,7 +29,7 @@ const readData = async () => {
   }
 };
 
-const executeAnnouncedCalls = async () => {
+export const executeAnnouncedCalls = async () => {
   const data = (await readData()).record;
   const announcedData = data.announce;
   const calls = announcedData.map((announce) => {
