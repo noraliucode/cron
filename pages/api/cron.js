@@ -1,6 +1,10 @@
-const { ApiPromise } = require("@polkadot/api");
+const { ApiPromise, WsProvider } = require("@polkadot/api");
 const { Keyring } = require("@polkadot/keyring");
-const { stringToU8a } = require("@polkadot/util");
+const { mnemonicToMiniSecret } = require("@polkadot/util-crypto");
+
+export const ROCOCO = "wss://rococo-rpc.polkadot.io";
+const wsProvider = new WsProvider(ROCOCO);
+const api = await ApiPromise.create({ provider: wsProvider });
 
 export const config = {
   runtime: "edge",
@@ -33,7 +37,7 @@ export const executeAnnouncedCalls = async () => {
   const data = (await readData()).record;
   const announcedData = data.announce;
   const calls = announcedData.map((announce) => {
-    return getAnnouncedCalls(announce.receiver, announce.amount);
+    return getAnnouncedCalls(announce.delegate, announce.real);
   });
   await batchCalls(calls);
 };
@@ -61,8 +65,6 @@ const getTransactionCalls = async (receiver, amount) => {
 
 const getAnnouncedCalls = async (delegate, real) => {
   try {
-    const api = await ApiPromise.create();
-
     const transfer = api.tx.proxy.proxyAnnounced(
       delegate,
       real,
@@ -78,10 +80,12 @@ const getAnnouncedCalls = async (delegate, real) => {
 
 const batchCalls = async (calls) => {
   // Sign and send the transaction using our account
-  const seed = process.env.REACT_APP_SEED;
+  const seed = process.env.NEXT_PUBLIC_SEED;
+  console.log("seed: ", seed);
 
   const keyring = new Keyring({ type: "sr25519" });
-  const sender = keyring.addFromSeed(stringToU8a(seed));
+  const seedU8a = mnemonicToMiniSecret(seed);
+  const sender = keyring.addFromSeed(seedU8a);
 
   const api = await ApiPromise.create();
   const txHash = await new Promise((resolve, reject) => {
