@@ -81,8 +81,6 @@ const getAnnouncedCalls = async (delegate, real) => {
 const batchCalls = async (calls) => {
   // Sign and send the transaction using our account
   const seed = process.env.NEXT_PUBLIC_SEED;
-  console.log("seed: ", seed);
-
   const keyring = new Keyring({ type: "sr25519" });
   const seedU8a = mnemonicToMiniSecret(seed);
   const sender = keyring.addFromSeed(seedU8a);
