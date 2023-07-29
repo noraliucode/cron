@@ -4,7 +4,6 @@ const { mnemonicToMiniSecret } = require("@polkadot/util-crypto");
 
 export const ROCOCO = "wss://rococo-rpc.polkadot.io";
 const wsProvider = new WsProvider(ROCOCO);
-const api = await ApiPromise.create({ provider: wsProvider });
 
 export const config = {
   runtime: "edge",
@@ -37,6 +36,7 @@ export const executeAnnouncedCalls = async () => {
   const data = (await readData()).record;
   const announcedData = data.announce;
   const calls = announcedData.map((announce) => {
+    console.log("announce: ", announce);
     return getAnnouncedCalls(announce.delegate, announce.real);
   });
   await batchCalls(calls);
@@ -53,7 +53,7 @@ const transferPayment = async () => {
 
 const getTransactionCalls = async (receiver, amount) => {
   try {
-    const api = await ApiPromise.create();
+    const api = await ApiPromise.create({ provider: wsProvider });
 
     const transfer = api.tx.balances.transfer(receiver, amount);
 
@@ -65,9 +65,10 @@ const getTransactionCalls = async (receiver, amount) => {
 
 const getAnnouncedCalls = async (delegate, real) => {
   try {
+    const api = await ApiPromise.create({ provider: wsProvider });
     const transfer = api.tx.proxy.proxyAnnounced(
-      delegate,
-      real,
+      [delegate],
+      [real],
       "Any",
       api.tx.balances.transfer
     );
@@ -85,7 +86,7 @@ const batchCalls = async (calls) => {
   const seedU8a = mnemonicToMiniSecret(seed);
   const sender = keyring.addFromSeed(seedU8a);
 
-  const api = await ApiPromise.create();
+  const api = await ApiPromise.create({ provider: wsProvider });
   const txHash = await new Promise((resolve, reject) => {
     api.tx.utility
       .batchAll(calls)
