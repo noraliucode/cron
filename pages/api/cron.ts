@@ -1,6 +1,9 @@
-const { ApiPromise } = require("@polkadot/api");
+const { ApiPromise, WsProvider } = require("@polkadot/api");
 const { Keyring } = require("@polkadot/keyring");
-const { stringToU8a } = require("@polkadot/util");
+const { mnemonicToMiniSecret } = require("@polkadot/util-crypto");
+
+export const ROCOCO = "wss://rococo-rpc.polkadot.io";
+const wsProvider = new WsProvider(ROCOCO);
 
 export const config = {
   runtime: "edge",
@@ -33,7 +36,8 @@ export const executeAnnouncedCalls = async () => {
   const data = (await readData()).record;
   const announcedData = data.announce;
   const calls = announcedData.map((announce) => {
-    return getAnnouncedCalls(announce.receiver, announce.amount);
+    console.log("announce: ", announce);
+    return getAnnouncedCalls(announce.delegate, announce.real);
   });
   await batchCalls(calls);
 };
@@ -49,7 +53,7 @@ const transferPayment = async () => {
 
 const getTransactionCalls = async (receiver, amount) => {
   try {
-    const api = await ApiPromise.create();
+    const api = await ApiPromise.create({ provider: wsProvider });
 
     const transfer = api.tx.balances.transfer(receiver, amount);
 
@@ -61,29 +65,28 @@ const getTransactionCalls = async (receiver, amount) => {
 
 const getAnnouncedCalls = async (delegate, real) => {
   try {
-    const api = await ApiPromise.create();
-
+    const api = await ApiPromise.create({ provider: wsProvider });
     const transfer = api.tx.proxy.proxyAnnounced(
-      delegate,
-      real,
+      [delegate],
+      [real],
       "Any",
       api.tx.balances.transfer
     );
 
     return transfer;
   } catch (error) {
-    console.log("getTransactions error:", error);
+    console.log("getAnnouncedCalls error:", error);
   }
 };
 
 const batchCalls = async (calls) => {
   // Sign and send the transaction using our account
-  const seed = process.env.REACT_APP_SEED;
-
+  const seed = process.env.NEXT_PUBLIC_SEED;
   const keyring = new Keyring({ type: "sr25519" });
-  const sender = keyring.addFromSeed(stringToU8a(seed));
+  const seedU8a = mnemonicToMiniSecret(seed);
+  const sender = keyring.addFromSeed(seedU8a);
 
-  const api = await ApiPromise.create();
+  const api = await ApiPromise.create({ provider: wsProvider });
   const txHash = await new Promise((resolve, reject) => {
     api.tx.utility
       .batchAll(calls)
