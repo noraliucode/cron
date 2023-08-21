@@ -1,25 +1,23 @@
+import { blake2AsHex } from "@polkadot/util-crypto";
+import { APIService } from "./apiService";
+
 const { ApiPromise, WsProvider } = require("@polkadot/api");
 const { Keyring } = require("@polkadot/keyring");
 const { mnemonicToMiniSecret } = require("@polkadot/util-crypto");
 
 export const ROCOCO = "wss://rococo-rpc.polkadot.io";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const wsProvider = new WsProvider(ROCOCO);
 
 export const config = {
   runtime: "edge",
 };
 
-export const readData = async () => {
+export const readData = async (collection = "data") => {
   try {
-    const response = await fetch(
-      `https://api.jsonbin.io/v3/b/${process.env.NEXT_PUBLIC_BIN_ID}`,
-      {
-        method: "GET",
-        headers: {
-          "X-Master-Key": `${process.env.NEXT_PUBLIC_BIN_SECRET_KEY}`,
-        },
-      }
-    );
+    const response = await fetch(`${API_URL}/${collection}`, {
+      method: "GET",
+    });
 
     if (!response.ok) {
       throw new Error(`readData HTTP error! status: ${response.status}`);
@@ -33,13 +31,38 @@ export const readData = async () => {
 };
 
 export const executeAnnouncedCalls = async () => {
-  const data = (await readData()).record;
-  const announcedData = data.announce;
-  const calls = announcedData.map((announce) => {
+  const announcedData = await readData("announced");
+
+  const api = await ApiPromise.create({ provider: wsProvider });
+  const apiService = new APIService(api);
+
+  const balances = await apiService.getBalances(
+    announcedData.map((announce) => announce.real)
+  );
+  const validAnnouncedData = announcedData.filter((announce, index) => {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    const balance = balances[index].data.free.toNumber();
+    const transferCall = apiService.getTransferSubmittable(
+      announce.real,
+      announce.total
+    );
+    const now = new Date().getTime();
+    const callHash = blake2AsHex(transferCall.toU8a());
+    return (
+      balance >= announce.total &&
+      callHash === announce.callHash &&
+      now > Number(announce.delayUntil)
+    );
+  });
+  console.log("validAnnouncedData: ", validAnnouncedData);
+
+  const calls = validAnnouncedData.map((announce) => {
     console.log("announce: ", announce);
     return getAnnouncedCalls(announce.delegate, announce.real);
   });
-  await batchCalls(calls);
+
+  const txHash = await batchCalls(calls);
 };
 
 const transferPayment = async () => {
