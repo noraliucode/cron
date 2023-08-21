@@ -1,37 +1,24 @@
 import { blake2AsHex } from "@polkadot/util-crypto";
 import { APIService } from "./apiService";
+import DatabaseService from "./databaseService";
 
 const { ApiPromise, WsProvider } = require("@polkadot/api");
 const { Keyring } = require("@polkadot/keyring");
 const { mnemonicToMiniSecret } = require("@polkadot/util-crypto");
 
 export const ROCOCO = "wss://rococo-rpc.polkadot.io";
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
 const wsProvider = new WsProvider(ROCOCO);
+const databaseService = new DatabaseService();
 
 export const config = {
   runtime: "edge",
 };
 
-export const readData = async (collection = "data") => {
-  try {
-    const response = await fetch(`${API_URL}/${collection}`, {
-      method: "GET",
-    });
-
-    if (!response.ok) {
-      throw new Error(`readData HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.log("There was a network error:", error);
-  }
-};
-
 export const executeAnnouncedCalls = async () => {
-  const announcedData = await readData("announced");
+  const announcedData = await databaseService.readData("announced");
+  if (!announcedData) {
+    return;
+  }
 
   const api = await ApiPromise.create({ provider: wsProvider });
   const apiService = new APIService(api);
@@ -56,17 +43,22 @@ export const executeAnnouncedCalls = async () => {
     );
   });
   console.log("validAnnouncedData: ", validAnnouncedData);
+  const ids = [];
 
   const calls = validAnnouncedData.map((announce) => {
     console.log("announce: ", announce);
+    ids.push(announce["_id"]);
     return getAnnouncedCalls(announce.delegate, announce.real);
   });
 
   const txHash = await batchCalls(calls);
+  if (txHash) {
+    databaseService.updateMany("announced", ids);
+  }
 };
 
 const transferPayment = async () => {
-  const data = (await readData()).record;
+  const data = await databaseService.readData();
   const pullPaymentData = data.pullPayment;
   const calls = pullPaymentData.map((payment) => {
     return getTransactionCalls(payment.receiver, payment.amount);
