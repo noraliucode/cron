@@ -1,49 +1,64 @@
+import { blake2AsHex } from "@polkadot/util-crypto";
+import { APIService } from "./apiService";
+import DatabaseService from "./databaseService";
+
 const { ApiPromise, WsProvider } = require("@polkadot/api");
 const { Keyring } = require("@polkadot/keyring");
 const { mnemonicToMiniSecret } = require("@polkadot/util-crypto");
 
 export const ROCOCO = "wss://rococo-rpc.polkadot.io";
 const wsProvider = new WsProvider(ROCOCO);
+const databaseService = new DatabaseService();
 
 export const config = {
   runtime: "edge",
 };
 
-export const readData = async () => {
-  try {
-    const response = await fetch(
-      `https://api.jsonbin.io/v3/b/${process.env.NEXT_PUBLIC_BIN_ID}`,
-      {
-        method: "GET",
-        headers: {
-          "X-Master-Key": `${process.env.NEXT_PUBLIC_BIN_SECRET_KEY}`,
-        },
-      }
+export const executeAnnouncedCalls = async () => {
+  const announcedData = await databaseService.readData("announced");
+  if (!announcedData) {
+    return;
+  }
+
+  const api = await ApiPromise.create({ provider: wsProvider });
+  const apiService = new APIService(api);
+
+  const balances = await apiService.getBalances(
+    announcedData.map((announce) => announce.real)
+  );
+  const validAnnouncedData = announcedData.filter((announce, index) => {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    const balance = balances[index].data.free.toNumber();
+    const transferCall = apiService.getTransferSubmittable(
+      announce.real,
+      announce.total
     );
+    const now = new Date().getTime();
+    const callHash = blake2AsHex(transferCall.toU8a());
+    return (
+      balance >= announce.total &&
+      callHash === announce.callHash &&
+      now > Number(announce.delayUntil)
+    );
+  });
+  console.log("validAnnouncedData: ", validAnnouncedData);
+  const ids = [];
 
-    if (!response.ok) {
-      throw new Error(`readData HTTP error! status: ${response.status}`);
-    }
+  const calls = validAnnouncedData.map((announce) => {
+    console.log("announce: ", announce);
+    ids.push(announce["_id"]);
+    return getAnnouncedCalls(announce.delegate, announce.real);
+  });
 
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.log("There was a network error:", error);
+  const txHash = await batchCalls(calls);
+  if (txHash) {
+    databaseService.updateMany("announced", ids);
   }
 };
 
-export const executeAnnouncedCalls = async () => {
-  const data = (await readData()).record;
-  const announcedData = data.announce;
-  const calls = announcedData.map((announce) => {
-    console.log("announce: ", announce);
-    return getAnnouncedCalls(announce.delegate, announce.real);
-  });
-  await batchCalls(calls);
-};
-
 const transferPayment = async () => {
-  const data = (await readData()).record;
+  const data = await databaseService.readData();
   const pullPaymentData = data.pullPayment;
   const calls = pullPaymentData.map((payment) => {
     return getTransactionCalls(payment.receiver, payment.amount);
